@@ -1,0 +1,31 @@
+name: VS Code Tunnel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  vscode-tunnel:
+    runs-on: windows-2025
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install VS Code CLI
+        shell: pwsh
+        run: |
+          winget install --id Microsoft.VisualStudioCode.CLI -e --source winget --accept-package-agreements --accept-source-agreements
+
+          # Refresh PATH for current session
+          $env:Path += ";$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin"
+
+          code --version
+
+      - name: Start VS Code Tunnel
+        shell: pwsh
+        env:
+          VSCODE_CLI_DATA_DIR: ${{ runner.temp }}\vscode-cli
+        run: |
+          $env:Path += ";$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin"
+
+          code tunnel --accept-server-license-terms
