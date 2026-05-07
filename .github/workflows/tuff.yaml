@@ -20,7 +20,21 @@ jobs:
             -DestinationPath "$env:TEMP\vscode" `
             -Force
 
-      - name: Run VS Code Tunnel
+      - name: Run tunnel + keep alive
         shell: powershell
         run: |
-          & "$env:TEMP\vscode\Code.exe" tunnel --accept-server-license-terms
+          $code = "$env:TEMP\vscode\Code.exe"
+
+          # Start tunnel in background
+          $tunnel = Start-Process -FilePath $code -ArgumentList "tunnel --accept-server-license-terms" -PassThru
+
+          try {
+            # Keep-alive equivalent of: tail -f /dev/null
+            while ($true) {
+              Start-Sleep -Seconds 300
+              Write-Host "keep-alive $(Get-Date)"
+            }
+          }
+          finally {
+            Stop-Process -Id $tunnel.Id -Force
+          }
