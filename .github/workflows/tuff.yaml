@@ -4,28 +4,26 @@ on:
   workflow_dispatch:
 
 jobs:
-  vscode-tunnel:
+  tunnel:
     runs-on: windows-2025
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install VS Code CLI
-        shell: pwsh
+      - name: Install VS Code CLI manually
+        shell: powershell
         run: |
-          winget install --id Microsoft.VisualStudioCode.CLI -e --source winget --accept-package-agreements --accept-source-agreements
+          Invoke-WebRequest `
+            -Uri "https://update.code.visualstudio.com/latest/win32-x64-user/stable" `
+            -OutFile "$env:TEMP\vscode-cli.exe"
 
-          # Refresh PATH for current session
-          $env:Path += ";$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin"
+          Start-Process `
+            -FilePath "$env:TEMP\vscode-cli.exe" `
+            -ArgumentList "/VERYSILENT /MERGETASKS=!runcode" `
+            -Wait
 
-          code --version
+          $codePath = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin"
+          echo "$codePath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Start VS Code Tunnel
-        shell: pwsh
-        env:
-          VSCODE_CLI_DATA_DIR: ${{ runner.temp }}\vscode-cli
+      - name: Run VS Code Tunnel
+        shell: powershell
         run: |
-          $env:Path += ";$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin"
-
-          code tunnel --accept-server-license-terms
+          code.exe tunnel --accept-server-license-terms
