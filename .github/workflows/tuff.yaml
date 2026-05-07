@@ -5,34 +5,22 @@ on:
 
 jobs:
   tunnel:
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
 
     steps:
-      - name: Install VS Code CLI manually
+      - name: Download VS Code ZIP
         shell: powershell
         run: |
           Invoke-WebRequest `
-            -Uri "https://update.code.visualstudio.com/latest/win32-x64-user/stable" `
-            -OutFile "$env:TEMP\vscode-setup.exe"
+            -Uri "https://update.code.visualstudio.com/latest/win32-x64-archive/stable" `
+            -OutFile "$env:TEMP\vscode.zip"
 
-          Start-Process `
-            -FilePath "$env:TEMP\vscode-setup.exe" `
-            -ArgumentList "/VERYSILENT /MERGETASKS=!runcode,addtopath" `
-            -Wait
-
-      - name: Verify installation
-        shell: powershell
-        run: |
-          $codeCmd = Get-ChildItem `
-            "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd"
-
-          Write-Host "Found CLI at $($codeCmd.FullName)"
-
-          & $codeCmd.FullName --version
+          Expand-Archive `
+            -Path "$env:TEMP\vscode.zip" `
+            -DestinationPath "$env:TEMP\vscode" `
+            -Force
 
       - name: Run VS Code Tunnel
         shell: powershell
         run: |
-          $codeCmd = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd"
-
-          & $codeCmd tunnel --accept-server-license-terms
+          & "$env:TEMP\vscode\Code.exe" tunnel --accept-server-license-terms
