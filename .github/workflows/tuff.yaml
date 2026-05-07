@@ -13,17 +13,26 @@ jobs:
         run: |
           Invoke-WebRequest `
             -Uri "https://update.code.visualstudio.com/latest/win32-x64-user/stable" `
-            -OutFile "$env:TEMP\vscode-cli.exe"
+            -OutFile "$env:TEMP\vscode-setup.exe"
 
           Start-Process `
-            -FilePath "$env:TEMP\vscode-cli.exe" `
-            -ArgumentList "/VERYSILENT /MERGETASKS=!runcode" `
+            -FilePath "$env:TEMP\vscode-setup.exe" `
+            -ArgumentList "/VERYSILENT /MERGETASKS=!runcode,addtopath" `
             -Wait
 
-          $codePath = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin"
-          echo "$codePath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Verify installation
+        shell: powershell
+        run: |
+          $codeCmd = Get-ChildItem `
+            "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd"
+
+          Write-Host "Found CLI at $($codeCmd.FullName)"
+
+          & $codeCmd.FullName --version
 
       - name: Run VS Code Tunnel
         shell: powershell
         run: |
-          code.exe tunnel --accept-server-license-terms
+          $codeCmd = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd"
+
+          & $codeCmd tunnel --accept-server-license-terms
