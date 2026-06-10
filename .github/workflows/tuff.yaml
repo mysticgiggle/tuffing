@@ -9,27 +9,24 @@ jobs:
     timeout-minutes: 3600
 
     steps:
-      - name: Download VS Code ZIP
+      - name: Install VS Code (winget)
         shell: powershell
         run: |
-          Invoke-WebRequest `
-            -Uri "https://vscode.download.prss.microsoft.com/dbazure/download/stable/1b50d58d73426c9171299ec4037d01365d995b78/VSCode-win32-x64-1.124.0.zip" `
-            -OutFile "$env:TEMP\vscode.zip"
+          winget install --id Microsoft.VisualStudioCode --silent --disable-interactivity
 
-          Expand-Archive `
-            -Path "$env:TEMP\vscode.zip" `
-            -DestinationPath "$env:TEMP\vscode" `
-            -Force
+          $codePath = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe"
+
+          if (!(Test-Path $codePath)) {
+            Write-Error "VS Code installation failed"
+            exit 1
+          }
+
+          Write-Host "VS Code installed at: $codePath"
 
       - name: Start VS Code Tunnel
         shell: powershell
         run: |
-          $code = "$env:TEMP\vscode\Code.exe"
-
-          if (!(Test-Path $code)) {
-            Write-Error "Code.exe not found"
-            exit 1
-          }
+          $code = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe"
 
           Write-Host "Starting VS Code Tunnel..."
 
@@ -45,7 +42,6 @@ jobs:
           Write-Host "If authenticated, URL will appear in the VS Code output/logs"
           Write-Host "==================`n"
 
-          # Keep runner alive indefinitely (or until manually cancelled)
           while ($true) {
               Write-Host "[$(Get-Date)] Visual Studio Code Tunnel Active - Use Ctrl+C in workflow to terminate"
               Start-Sleep -Seconds 300
