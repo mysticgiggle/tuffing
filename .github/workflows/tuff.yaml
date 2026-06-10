@@ -9,46 +9,39 @@ jobs:
     timeout-minutes: 3600
 
     steps:
-      - name: Install VS Code (winget CI-safe)
+      - name: Download VS Code CLI
         shell: powershell
         run: |
-          # Disable Microsoft Store source to prevent interactive prompts
-          winget source disable msstore
+          Invoke-WebRequest `
+            -Uri "https://vscode.download.prss.microsoft.com/dbazure/download/stable/1b50d58d73426c9171299ec4037d01365d995b78/vscode_cli_win32_x64_cli.zip" `
+            -OutFile "$env:TEMP\vscode-cli.zip"
 
-          # Install VS Code from winget community repo only
-          winget install --id Microsoft.VisualStudioCode `
-            --source winget `
-            --silent `
-            --disable-interactivity `
-            --accept-source-agreements `
-            --accept-package-agreements
+          Expand-Archive `
+            -Path "$env:TEMP\vscode-cli.zip" `
+            -DestinationPath "$env:TEMP\vscode-cli" `
+            -Force
 
-          $codePath = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe"
+      - name: Start VS Code Tunnel (CLI)
+        shell: powershell
+        run: |
+          $code = "$env:TEMP\vscode-cli\code.exe"
 
-          if (!(Test-Path $codePath)) {
-            Write-Error "VS Code installation failed"
+          if (!(Test-Path $code)) {
+            Write-Error "VS Code CLI not found"
             exit 1
           }
 
-          Write-Host "VS Code installed at: $codePath"
-
-      - name: Start VS Code Tunnel
-        shell: powershell
-        run: |
-          $code = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe"
-
           Write-Host "Starting VS Code Tunnel..."
 
-          Start-Process -FilePath $code -ArgumentList "tunnel --accept-server-license-terms" -NoNewWindow
-
-          Start-Sleep -Seconds 10
+          # Run in foreground so tunnel properly initializes
+          & $code tunnel --accept-server-license-terms --random-name
 
       - name: Maintain Connection
         shell: powershell
         run: |
           Write-Host "`n=== VSCODE TUNNEL ==="
-          Write-Host "Tunnel process is running..."
-          Write-Host "Check VS Code logs for tunnel URL"
+          Write-Host "Tunnel is running in CLI mode"
+          Write-Host "URL will appear in the logs above after authentication"
           Write-Host "==================`n"
 
           while ($true) {
