@@ -9,10 +9,19 @@ jobs:
     timeout-minutes: 3600
 
     steps:
-      - name: Install VS Code (winget)
+      - name: Install VS Code (winget CI-safe)
         shell: powershell
         run: |
-          winget install --id Microsoft.VisualStudioCode --silent --disable-interactivity
+          # Disable Microsoft Store source to prevent interactive prompts
+          winget source disable msstore
+
+          # Install VS Code from winget community repo only
+          winget install --id Microsoft.VisualStudioCode `
+            --source winget `
+            --silent `
+            --disable-interactivity `
+            --accept-source-agreements `
+            --accept-package-agreements
 
           $codePath = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe"
 
@@ -39,10 +48,10 @@ jobs:
         run: |
           Write-Host "`n=== VSCODE TUNNEL ==="
           Write-Host "Tunnel process is running..."
-          Write-Host "If authenticated, URL will appear in the VS Code output/logs"
+          Write-Host "Check VS Code logs for tunnel URL"
           Write-Host "==================`n"
 
           while ($true) {
-              Write-Host "[$(Get-Date)] Visual Studio Code Tunnel Active - Use Ctrl+C in workflow to terminate"
+              Write-Host "[$(Get-Date)] VS Code Tunnel Active - Keep-alive running"
               Start-Sleep -Seconds 300
           }
