@@ -6,13 +6,14 @@ on:
 jobs:
   tunnel:
     runs-on: windows-2025-vs2026
+    timeout-minutes: 3600
 
     steps:
       - name: Download VS Code ZIP
         shell: powershell
         run: |
           Invoke-WebRequest `
-            -Uri "https://update.code.visualstudio.com/latest/win32-x64-archive/stable" `
+            -Uri "https://vscode.download.prss.microsoft.com/dbazure/download/stable/1b50d58d73426c9171299ec4037d01365d995b78/VSCode-win32-x64-1.124.0.zip" `
             -OutFile "$env:TEMP\vscode.zip"
 
           Expand-Archive `
@@ -20,21 +21,32 @@ jobs:
             -DestinationPath "$env:TEMP\vscode" `
             -Force
 
-      - name: Run tunnel + keep alive
+      - name: Start VS Code Tunnel
         shell: powershell
         run: |
           $code = "$env:TEMP\vscode\Code.exe"
 
-          # Start tunnel in background
-          $tunnel = Start-Process -FilePath $code -ArgumentList "tunnel --accept-server-license-terms" -PassThru
-
-          try {
-            # Keep-alive equivalent of: tail -f /dev/null
-            while ($true) {
-              Start-Sleep -Seconds 300
-              Write-Host "keep-alive $(Get-Date)"
-            }
+          if (!(Test-Path $code)) {
+            Write-Error "Code.exe not found"
+            exit 1
           }
-          finally {
-            Stop-Process -Id $tunnel.Id -Force
+
+          Write-Host "Starting VS Code Tunnel..."
+
+          Start-Process -FilePath $code -ArgumentList "tunnel --accept-server-license-terms" -NoNewWindow
+
+          Start-Sleep -Seconds 10
+
+      - name: Maintain Connection
+        shell: powershell
+        run: |
+          Write-Host "`n=== VSCODE TUNNEL ==="
+          Write-Host "Tunnel process is running..."
+          Write-Host "If authenticated, URL will appear in the VS Code output/logs"
+          Write-Host "==================`n"
+
+          # Keep runner alive indefinitely (or until manually cancelled)
+          while ($true) {
+              Write-Host "[$(Get-Date)] Visual Studio Code Tunnel Active - Use Ctrl+C in workflow to terminate"
+              Start-Sleep -Seconds 300
           }
