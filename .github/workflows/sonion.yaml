@@ -1,0 +1,21 @@
+name: Code Tunnel Runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  tunnel:
+    runs-on: xcode-27
+
+    steps:
+      - name: Install VS Code CLI
+        run: |
+          brew install --cask visual-studio-code
+
+      - name: Start Code Tunnel
+        run: |
+          code tunnel --accept-server-license-terms
+
+      - name: Keep runner alive
+        run: |
+          tail -f /dev/null
