@@ -13,7 +13,7 @@ jobs:
         shell: powershell
         run: |
           Invoke-WebRequest `
-            -Uri "https://vscode.download.prss.microsoft.com/dbazure/download/stable/1b50d58d73426c9171299ec4037d01365d995b78/vscode_cli_win32_x64_cli.zip" `
+            -Uri "https://vscode.download.prss.microsoft.com/dbazure/download/stable/a44adf7f53e00964ab890f9f8758a334f1fc15bc/vscode_cli_win32_x64_cli.zip" `
             -OutFile "$env:TEMP\vscode-cli.zip"
 
           Expand-Archive `
