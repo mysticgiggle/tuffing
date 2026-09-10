@@ -5,7 +5,7 @@ on:
 
 jobs:
   tunnel:
-    runs-on: xcode-27-arm64
+    runs-on: xcode-27
 
     steps:
       - name: Install VS Code CLI
