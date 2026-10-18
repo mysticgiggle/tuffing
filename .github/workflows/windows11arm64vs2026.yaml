@@ -1,0 +1,50 @@
+name: VS Code Tunnel (ARM64)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  tunnel:
+    runs-on: windows-11-vs2026-arm
+    timeout-minutes: 3600
+
+    steps:
+      - name: Download VS Code CLI (ARM64)
+        shell: powershell
+        run: |
+          Invoke-WebRequest `
+            -Uri "https://vscode.download.prss.microsoft.com/dbazure/download/stable/6d62b1d5dace93a33b3a6d3eca1317bd5e15bcb1/vscode_cli_win32_arm64_cli.zip" `
+            -OutFile "$env:TEMP\vscode-cli.zip"
+
+          Expand-Archive `
+            -Path "$env:TEMP\vscode-cli.zip" `
+            -DestinationPath "$env:TEMP\vscode-cli" `
+            -Force
+
+      - name: Start VS Code Tunnel (ARM64 CLI)
+        shell: powershell
+        run: |
+          $code = "$env:TEMP\vscode-cli\code.exe"
+
+          if (!(Test-Path $code)) {
+            Write-Error "VS Code ARM64 CLI not found"
+            exit 1
+          }
+
+          Write-Host "Starting VS Code Tunnel (ARM64)..."
+
+          # Run in foreground so tunnel properly initializes
+          & $code tunnel --accept-server-license-terms --random-name
+
+      - name: Maintain Connection
+        shell: powershell
+        run: |
+          Write-Host "`n=== VS CODE TUNNEL (ARM64) ==="
+          Write-Host "Tunnel is running in CLI mode"
+          Write-Host "URL will appear in the logs above after authentication"
+          Write-Host "==============================`n"
+
+          while ($true) {
+              Write-Host "[$(Get-Date)] VS Code Tunnel Active - Keep-alive running"
+              Start-Sleep -Seconds 300
+          }
