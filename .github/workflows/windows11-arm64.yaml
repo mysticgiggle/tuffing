@@ -25,7 +25,7 @@ jobs:
             -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
             -Name "SecurityLayer" -Value 2 -Force
 
-          # Allow RDP only from Tailscale IP range
+          # Restrict RDP to Tailscale addresses
           netsh advfirewall firewall delete rule name="RDP-Tailscale"
 
           netsh advfirewall firewall add rule `
@@ -35,7 +35,7 @@ jobs:
 
           Restart-Service -Name TermService -Force
 
-      - name: Install Tailscale
+      - name: Install Tailscale ARM64
         shell: powershell
         run: |
           $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.104.6-arm64.msi"
@@ -43,64 +43,152 @@ jobs:
 
           Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
 
-          Start-Process msiexec.exe `
+          $process = Start-Process msiexec.exe `
             -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" `
-            -Wait
+            -Wait -PassThru
 
           Remove-Item $installerPath -Force
 
+          if ($process.ExitCode -notin @(0, 3010)) {
+              throw "Tailscale installation failed: $($process.ExitCode)"
+          }
+
       - name: Establish Tailscale Connection
         shell: powershell
+        env:
+          TS_AUTHKEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
         run: |
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up `
-            --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} `
-            --hostname=gh-runner-$env:GITHUB_RUN_ID
+          $ts = "$env:ProgramFiles\Tailscale\tailscale.exe"
 
-          $tsIP = $null
-          $retries = 0
+          # Verify authentication key
+          if ([string]::IsNullOrWhiteSpace($env:TS_AUTHKEY)) {
+              throw "TAILSCALE_AUTH_KEY GitHub Secret is missing."
+          }
 
-          while (-not $tsIP -and $retries -lt 10) {
-              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+          if (-not (Test-Path $ts)) {
+              throw "Tailscale executable not found."
+          }
 
-              if (-not $tsIP) {
-                  Start-Sleep -Seconds 5
+          # Start Tailscale service
+          $service = Get-Service -Name Tailscale -ErrorAction Stop
+
+          if ($service.Status -ne "Running") {
+              Start-Service Tailscale
+          }
+
+          # Wait for daemon initialization
+          $ready = $false
+
+          for ($i = 0; $i -lt 30; $i++) {
+              $status = & $ts status --json 2>$null
+
+              if ($LASTEXITCODE -eq 0 -and $status) {
+                  try {
+                      $state = ($status | ConvertFrom-Json).BackendState
+
+                      if ($state -ne "NoState" -and $state -ne "Starting") {
+                          $ready = $true
+                          break
+                      }
+                  } catch {}
               }
 
-              $retries++
+              Start-Sleep -Seconds 2
+          }
+
+          if (-not $ready) {
+              Write-Host "Tailscale initialization diagnostics:"
+              & $ts status
+              throw "Tailscale daemon failed to initialize."
+          }
+
+          # Authenticate and connect
+          Write-Host "Authenticating with Tailscale..."
+
+          & $ts up `
+              --authkey="$env:TS_AUTHKEY" `
+              --hostname="gh-runner-$env:GITHUB_RUN_ID"
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "Tailscale authentication or connection failed."
+          }
+
+          # Wait for Running state and IPv4 address
+          $tsIP = $null
+
+          for ($i = 0; $i -lt 60; $i++) {
+              $status = & $ts status --json 2>$null
+
+              if ($LASTEXITCODE -eq 0 -and $status) {
+                  $data = $status | ConvertFrom-Json
+
+                  if ($data.BackendState -eq "Running") {
+                      $ips = & $ts ip -4 2>$null
+
+                      if ($LASTEXITCODE -eq 0 -and $ips) {
+                          $tsIP = ($ips | Select-Object -First 1).Trim()
+
+                          if ($tsIP) {
+                              break
+                          }
+                      }
+                  }
+              }
+
+              Write-Host "Waiting for Tailscale IP... ($($i + 1)/60)"
+              Start-Sleep -Seconds 5
           }
 
           if (-not $tsIP) {
-              Write-Error "Tailscale IP not assigned. Exiting."
-              exit 1
+              Write-Host "Tailscale diagnostics:"
+              & $ts status
+              & $ts netcheck
+
+              throw "No Tailscale IPv4 address assigned."
           }
 
-          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+          Write-Host "Tailscale connected successfully!"
+          Write-Host "Tailscale IP: $tsIP"
 
-      - name: Verify RDP Accessibility
+          "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+
+      - name: Verify RDP Configuration
         shell: powershell
         run: |
           Write-Host "Tailscale IP: $env:TAILSCALE_IP"
 
-          $testResult = Test-NetConnection `
-            -ComputerName $env:TAILSCALE_IP `
-            -Port 3389
+          # Verify RDP service
+          $service = Get-Service TermService
 
-          if (-not $testResult.TcpTestSucceeded) {
-              Write-Error "TCP connection to RDP port 3389 failed"
-              exit 1
+          if ($service.Status -ne "Running") {
+              Start-Service TermService
           }
 
-          Write-Host "TCP connectivity successful!"
+          # Verify RDP listener
+          $listener = Get-NetTCPConnection `
+              -LocalPort 3389 `
+              -State Listen `
+              -ErrorAction SilentlyContinue
+
+          if (-not $listener) {
+              throw "RDP listener is not active on port 3389."
+          }
+
+          Write-Host "RDP listener is active."
 
       - name: Maintain Connection
         shell: powershell
         run: |
-          Write-Host "`n=== RDP ACCESS ==="
+          Write-Host ""
+          Write-Host "========== RDP ACCESS =========="
           Write-Host "Address: $env:TAILSCALE_IP"
           Write-Host "Username: runneradmin"
-          Write-Host "==================`n"
+          Write-Host "================================"
+
+          Write-Host "Use your existing runneradmin credentials."
+          Write-Host "Keep this workflow running while connected."
 
           while ($true) {
-              Write-Host "[$(Get-Date)] RDP Active"
+              Write-Host "[$(Get-Date)] Runner active."
               Start-Sleep -Seconds 300
           }
